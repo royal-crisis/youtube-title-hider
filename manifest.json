@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Title Hider",
+  "version": "1.0",
+  "description": "Hides YouTube video titles from both the head and body of the page",
+  "permissions": ["activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ]
+}

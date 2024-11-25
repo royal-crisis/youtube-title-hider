@@ -1,0 +1,9 @@
+/* The extension now only hides titles on video watch pages */
+ytd-watch-metadata h1.ytd-watch-metadata {
+    visibility: hidden !important;
+}
+
+/* Hide title in fullscreen mode */
+.ytp-title {
+    display: none !important;
+}
