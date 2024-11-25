@@ -3,10 +3,47 @@ function isVideoPage() {
     return window.location.pathname === '/watch' && window.location.search.includes('v=');
 }
 
-// Function to hide the document title
-function hideDocumentTitle() {
-    if (isVideoPage()) {
+// Function to handle title visibility
+function updateTitleVisibility(hide) {
+    if (!isVideoPage()) return;
+    
+    // Get all title elements
+    const mainTitle = document.querySelector('ytd-watch-metadata h1.ytd-watch-metadata');
+    const fullscreenTitle = document.querySelector('.ytp-title');
+    const originalTitle = document.querySelector('title');
+    
+    // Remove any inline styles that might have been set
+    if (mainTitle) {
+        mainTitle.style.removeProperty('visibility');
+        if (!hide) {
+            // Force visibility by adding a class
+            mainTitle.classList.remove('title-hidden');
+        } else {
+            mainTitle.classList.add('title-hidden');
+        }
+    }
+    
+    if (fullscreenTitle) {
+        fullscreenTitle.style.removeProperty('display');
+        if (!hide) {
+            fullscreenTitle.classList.remove('title-hidden');
+        } else {
+            fullscreenTitle.classList.add('title-hidden');
+        }
+    }
+    
+    // Handle page title
+    if (hide) {
+        if (!mainTitle?.dataset.originalTitle && originalTitle) {
+            mainTitle?.setAttribute('data-original-title', originalTitle.textContent);
+        }
         document.title = "YouTube";
+    } else {
+        // Restore original title if available
+        const savedTitle = mainTitle?.getAttribute('data-original-title');
+        if (savedTitle) {
+            document.title = savedTitle;
+        }
     }
 }
 
@@ -23,63 +60,54 @@ function debounce(func, wait) {
     };
 }
 
-// Function to handle title visibility
-const updateTitleVisibility = debounce(() => {
-    if (!isVideoPage()) return;
+// Add styles to the page
+const style = document.createElement('style');
+style.textContent = `
+    .title-hidden {
+        visibility: hidden !important;
+        display: none !important;
+    }
+`;
+document.head.appendChild(style);
+
+let currentHideState = true; // Default state
+
+// Get initial state and set up observers
+chrome.storage.sync.get(['hideTitles'], function(result) {
+    currentHideState = result.hideTitles !== false; // Default to true if not set
     
-    const mainTitle = document.querySelector('ytd-watch-metadata h1.ytd-watch-metadata');
-    if (mainTitle) {
-        mainTitle.style.visibility = 'hidden';
-    }
-}, 100);
-
-// Wait for the page to be ready
-window.addEventListener('load', () => {
-    // Initial title hide
-    hideDocumentTitle();
-    updateTitleVisibility();
-
-    // Create an observer to watch for title changes
-    const titleElement = document.querySelector('title');
-    if (titleElement) {
-        const titleObserver = new MutationObserver(debounce(hideDocumentTitle, 100));
-        titleObserver.observe(titleElement, {
+    // Initial setup
+    const setupObservers = () => {
+        updateTitleVisibility(currentHideState);
+        
+        // Create an observer for dynamic content changes
+        const bodyObserver = new MutationObserver(debounce(() => {
+            if (isVideoPage()) {
+                updateTitleVisibility(currentHideState);
+            }
+        }, 100));
+        
+        // Start observing the body for changes
+        bodyObserver.observe(document.body, {
+            childList: true,
             subtree: true,
-            characterData: true,
-            childList: true
+            attributes: false,
+            characterData: false
         });
+    };
+
+    // Wait for page load or run immediately if already loaded
+    if (document.readyState === 'loading') {
+        window.addEventListener('load', setupObservers);
+    } else {
+        setupObservers();
     }
-
-    // Create an observer for dynamic content changes
-    const bodyObserver = new MutationObserver(debounce((mutations) => {
-        if (isVideoPage()) {
-            updateTitleVisibility();
-        }
-    }, 100));
-
-    // Start observing the body for changes
-    bodyObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: false,
-        characterData: false
-    });
 });
 
-// Handle URL changes
-let lastUrl = location.href;
-const urlObserver = new MutationObserver(debounce(() => {
-    const url = location.href;
-    if (url !== lastUrl) {
-        lastUrl = url;
-        hideDocumentTitle();
-        updateTitleVisibility();
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'toggleTitles') {
+        currentHideState = message.hide;
+        updateTitleVisibility(currentHideState);
     }
-}, 100));
-
-urlObserver.observe(document, {
-    subtree: true,
-    childList: true,
-    attributes: false,
-    characterData: false
 });
